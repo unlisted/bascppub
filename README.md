@@ -2,8 +2,13 @@
 Basic publishing service using Chalice framework
 
 ## API Status
-A random status is chosen from a list of dictionaries and returned to the caller. API can be used by sending GET to /status endpoint.
+API can be used by sending GET to /status endpoint.
 
+https://v9dqfziqk4.execute-api.us-east-2.amazonaws.com/dev/status
+
+A random status is chosen from a list of dictionaries and returned to the caller. 
+
+Random status was chosen over returning useful and real status information in order to preserve time to dedicate to the remaining two more interesting problems.
 ```
 (chalice-demo) morgan@chair:~/work/ad/basicpub$ http https://v9dqfziqk4.execute-api.us-east-2.amazonaws.com/dev/status
 HTTP/1.1 200 OK
@@ -25,7 +30,13 @@ x-amzn-RequestId: a854278c-58e2-11e7-bbb7-d94a01a4b900
 ## Transform publicly available data into something fun.
 Play Street Dice
 
-API supports two functions, reset and roll. Game state is maintained in two S3 keys, count and setpoint. Count stores the number of rolls and setpoint stores the current setpoint. Reset will reset the currently running game by setting count to zero and setting set to empty string.
+https://v9dqfziqk4.execute-api.us-east-2.amazonaws.com/dev/dice/reset
+
+https://v9dqfziqk4.execute-api.us-east-2.amazonaws.com/dev/dice/roll
+
+API supports two functions, reset and roll which can be executed by sending GET to /reset and /roll respectively. 
+
+Game state is maintained in two S3 keys, count and setpoint. Count stores the number of rolls and setpoint stores the current setpoint. Reset will reset the currently running game by setting count to zero and setting set to empty string.
 
 Roll works by calling the dice rolling API at http://roll.diceapi.com/json/2d6. This endpoint returns the results of rolling two six sided die. Roll sums the values and returns a JSON object containing the following fields
 * count - number of rolls so far (not including last roll)
@@ -34,7 +45,14 @@ Roll works by calling the dice rolling API at http://roll.diceapi.com/json/2d6. 
 * result - win, lose, roll again, reset
 
 Game loosly follows the rules of Street Dice (craps) which can be found here
+
 https://wizardofodds.com/games/street-dice/
+
+Game state is defined simply in two S3 keys for the sake of quickly producing a working game. With more time available for design I would have liked to address the following items.
+* properly serialize game state (use Python 3 for byte type support)
+* support multiuser by generating and returning gameID and storing game state for each gameID
+* keep metrics (win/loss streaks, etc..)
+* lazy initialize state (currently reset must be called before roll on fresh deploy)
 
 ```
 (chalice-demo) morgan@chair:~/work/ad/basicpub$ http https://v9dqfziqk4.execute-api.us-east-2.amazonaws.com/dev/dice/reset
@@ -75,11 +93,35 @@ x-amzn-RequestId: b1540cfb-58e5-11e7-9e16-2b7924135912
     "setpoint": null
 }
 ```
+## Upload a PNG image to S3
 
+https://v9dqfziqk4.execute-api.us-east-2.amazonaws.com/dev/dice/reset
 
-Some things that could have been done better
-* properly serialize game state (use Python 3 for byte type support)
-* support multiuser by generating and returning gameID and storing game state for each gameID
-* keep metrics (win/loss streaks, etc..)
-* lazy initialize state (currently reset must be called before roll on fresh deploy)
+A png image can be uploaded and stored on S3 by sending POST to the /send endpoint and including the raw data in the request body.
+
+The function which handles /send uses boto3 api to store the data in an S3 bucket and returns the resource url in a JSON object.
+
+For the sake of simplicity the uploaded file is always stored under the same key. A better approach may have been to either generate key names or accecpt key names from the client
+
+```
+(chalice-demo) morgan@chair:~/work/ad/basicpub$ http POST https://v9dqfziqk4.execute-api.us-east-2.amazonaws.com/dev/send @/home/morgan/sources/CppCoreGuidelines/param-passing-advanced.png
+HTTP/1.1 200 OK
+Connection: keep-alive
+Content-Length: 63
+Content-Type: application/json
+Date: Sat, 24 Jun 2017 14:33:50 GMT
+Via: 1.1 0ae737265831ce30da6ba6dcf15e3d61.cloudfront.net (CloudFront)
+X-Amz-Cf-Id: PV_TiF1l-j55oO5OSHueWMhpo2Tkxf9rRIgwew_vh49SE1MbPkQ4yA==
+X-Amzn-Trace-Id: sampled=0;root=1-594e784e-4348ee54be3b89bc53f9b2a3
+X-Cache: Miss from cloudfront
+x-amzn-RequestId: 23e178ad-58ea-11e7-80ff-217bc3da301a
+
+{
+    "url": "https://s3.us-east-2.amazonaws.com/basicpub/test.png"
+}
+```
+
+## A note about credentials
+In order to get the API to work correctly I had to generate an IAM policy which allows all actions on the S3 service. It's not ideal from a security perspective but it allows the API to function. The policy is stored in .chalice/policy.json. To use this policy chalice must be deployed as follows
+```chalice deploy --no-autogen-policy```
 
